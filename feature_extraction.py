@@ -4,6 +4,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import pandas as pd
+from dataset import Luna16Dataset
 from config import mhd_dir, slices_dir, candidates_file, transform, features_dir, device, batch_size
 
 # Load Pre-trained DINOv2 Model

@@ -3,12 +3,12 @@ import torch
 from torchvision import transforms
 
 # Define Paths
-mhd_dir = r"path to your dataset/LUNA16"  # Directory with original .mhd files for metadata
-slices_dir = r"path to your dataset/LUNA_png"  # Directory with 2D .png slices
-candidates_file = r"path to your/candidates.csv"  # Candidate locations for SSL
-checkpoint_dir = r"path to your/checkpoints"  # Directory to save model checkpoints
-annotated_dir = r"path to your/annotated_bbox"  # Directory to save annotated slices
-features_dir = r"path to your/DINO/features"  # Directory to save extracted features
+mhd_dir = r"/home/ubuntu-user/WMQ/data/unzipped_luna16"  # Directory with original .mhd files for metadata
+slices_dir = r"/home/ubuntu-user/QMW/Data"  # Directory with 2D .png slices
+candidates_file = r"/home/ubuntu-user/QMW/candidates.csv"  # Candidate locations for SSL
+checkpoint_dir = r"/home/ubuntu-user/QMW/checkpoints"  # Directory to save model checkpoints
+annotated_dir = r"/home/ubuntu-user/QMW/annotated_bbox"  # Directory to save annotated slices
+features_dir = r"/home/ubuntu-user/QMW/features"  # Directory to save extracted features
 os.makedirs(checkpoint_dir, exist_ok=True)
 os.makedirs(annotated_dir, exist_ok=True)
 os.makedirs(features_dir, exist_ok=True)
