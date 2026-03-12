@@ -6,23 +6,26 @@ from tqdm import tqdm
 import pandas as pd
 from dataset import Luna16Dataset
 from config import mhd_dir, slices_dir, candidates_file, transform, features_dir, device, batch_size
+import multiprocessing
 
 # Load Pre-trained DINOv2 Model
 dinov2_vitl14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14').to(device)
 dinov2_vitl14.eval()
+# 利用预训练的 DINOv2 深度学习模型，从 LUNA16 肺部 CT 扫描图像中提取高维特征向量，并将这些特征保存为 .npy 文件，以便后续用于训练分类器
 
 # Load Candidates
 df_candidates = pd.read_csv(candidates_file)
 
 # Load Dataset
-dataset = Luna16Dataset(mhd_dir, slices_dir, df_candidates, transform, dinov2_vitl14, device)
+dataset = Luna16Dataset(mhd_dir, slices_dir, df_candidates, transform, dinov2_vitl14, device) #, max_slices=2000)
 train_size = int(0.7 * len(dataset))
 val_size = int(0.15 * len(dataset))
 test_size = len(dataset) - train_size - val_size
 train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
-val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)                 
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+                         
 
 # Function to extract and save features
 def extract_features(loader, split_name):

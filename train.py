@@ -13,6 +13,7 @@ from tqdm import tqdm
 import joblib
 from model import DinoDetector
 import pandas as pd
+from dataset import Luna16Dataset
 from config import mhd_dir, slices_dir, candidates_file, transform, device, batch_size, learning_rate, weight_decay, num_epochs, checkpoint_dir, annotated_dir, features_dir
 
 # Load Pre-trained DINOv2 Model
@@ -30,7 +31,7 @@ feature_dim = dummy_feature.shape[0]
 df_candidates = pd.read_csv(candidates_file)
 
 # Load Dataset
-dataset = Luna16Dataset(mhd_dir, slices_dir, df_candidates, transform, dinov2_vitl14, device)
+dataset = Luna16Dataset(mhd_dir, slices_dir, df_candidates, transform, dinov2_vitl14, device)# , max_slices=2000)
 train_size = int(0.7 * len(dataset))
 val_size = int(0.15 * len(dataset))
 test_size = len(dataset) - train_size - val_size

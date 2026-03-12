@@ -12,7 +12,6 @@ from pathlib import Path
 ZIP_SOURCE_DIR = r"/home/ubuntu-user/WMQ/data/subsets"
 
 # 2. 临时解压目录 (解压后的 .mhd/.raw 将放在这里，处理完可删除)
-# 建议放在空间较大的磁盘
 UNZIP_TEMP_DIR = r"/home/ubuntu-user/WMQ/data/unzipped_luna16"
 
 # 3. 最终输出目录 (生成的 PNG 将按 subset0-subset9 结构存放在这里)
@@ -23,7 +22,7 @@ OUTPUT_DIR = r"/home/ubuntu-user/QMW/Data"
 TARGET_SIZE = 504
 
 # 5. 是否清理旧数据 (True: 每次运行前清空 OUTPUT_DIR，防止旧数据干扰)
-CLEAN_OUTPUT_BEFORE_RUN = True
+# CLEAN_OUTPUT_BEFORE_RUN = True
 
 # ===============================================================
 

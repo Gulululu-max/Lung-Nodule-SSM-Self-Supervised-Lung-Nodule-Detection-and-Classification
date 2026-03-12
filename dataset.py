@@ -74,6 +74,7 @@ class Luna16Dataset(Dataset):
     #                 self.data_info.append((slice_path, label, bbox))
 
     #     print(f"Loaded {len(self.data_info)} slices.")
+
     def __init__(self, mhd_dir, slices_dir, candidates_df, transform, dino_model, device):
         self.mhd_dir = mhd_dir
         self.slices_dir = slices_dir
@@ -186,10 +187,128 @@ class Luna16Dataset(Dataset):
         if len(self.data_info) == 0:
             print("WARNING: No valid slices found! Attempting fallback...")
             self._load_fallback_data()
-        # if len(self.data_info) == 0:
-        #     print("WARNING: No valid slices found! Attempting fallback...")
-        #     self._load_fallback_data()
 
+
+    # def __init__(self, mhd_dir, slices_dir, candidates_df, transform, dino_model, device, max_slices=None):
+    #     self.mhd_dir = mhd_dir
+    #     self.slices_dir = slices_dir
+    #     self.candidates_df = candidates_df
+    #     self.transform = transform
+    #     self.dino_model = dino_model
+    #     self.device = device
+    #     self.max_slices = max_slices  # ✅ 新增：最大切片数量限制
+    #     self.data_info = []
+    #     self.slice_counts = {}
+
+    #     print(f"Loading dataset... (Max slices limit: {max_slices if max_slices else 'None'})")
+
+    #     # 预先构建 candidates 映射，加速查找: {seriesuid: [row_data]}
+    #     candidate_map = {}
+    #     for _, row in candidates_df.iterrows():
+    #         uid = row['seriesuid']
+    #         if uid not in candidate_map:
+    #             candidate_map[uid] = []
+    #         candidate_map[uid].append(row)
+
+    #     # 遍历所有 subset (0-9)
+    #     for subset in range(10):
+    #         # ✅ 提前检查：如果已经达到上限，直接跳出整个循环
+    #         if self.max_slices is not None and len(self.data_info) >= self.max_slices:
+    #             break
+
+    #         subset_slices_path = os.path.join(self.slices_dir, f"subset{subset}")
+    #         if not os.path.exists(subset_slices_path):
+    #             print(f"⚠️ Warning: Subset directory not found: {subset_slices_path}")
+    #             continue
+
+    #         # 获取该目录下所有 PNG 文件
+    #         all_png_files = [f for f in os.listdir(subset_slices_path) if f.endswith('.png')]
+            
+    #         if not all_png_files:
+    #             print(f"   No PNG files found in {subset_slices_path}")
+    #             continue
+
+    #         print(f"   Processing subset{subset}: {len(all_png_files)} files found")
+
+    #         # 按 seriesuid 分组文件
+    #         files_by_uid = {}
+    #         for fname in all_png_files:
+    #             try:
+    #                 parts = fname.rsplit('_', 1)
+    #                 if len(parts) != 2:
+    #                     continue 
+    #                 uid = parts[0]
+    #                 if uid not in files_by_uid:
+    #                     files_by_uid[uid] = []
+    #                 files_by_uid[uid].append(fname)
+    #             except Exception:
+    #                 continue
+
+    #         # 遍历每个病人
+    #         for seriesuid, file_list in tqdm(files_by_uid.items(), desc=f"Indexing subset{subset}"):
+    #             # ✅ 内部检查：每处理一个病人前，再次确认是否达到上限
+    #             if self.max_slices is not None and len(self.data_info) >= self.max_slices:
+    #                 break
+
+    #             # 1. 获取 Metadata
+    #             origin, spacing = get_metadata_or_default(self.mhd_dir, seriesuid)
+                
+    #             # 2. 计算该病人的结节所在切片索引 (Z-index)
+    #             target_z_indices = set()
+    #             if seriesuid in candidate_map:
+    #                 for row in candidate_map[seriesuid]:
+    #                     try:
+    #                         c_z = row["coordZ"]
+    #                         o_z = origin[2]
+    #                         s_z = spacing[2]
+    #                         if s_z == 0: s_z = 1.0
+    #                         z_idx = int(np.rint((c_z - o_z) / s_z))
+    #                         target_z_indices.add(z_idx)
+    #                     except Exception as e:
+    #                         pass
+
+    #             self.slice_counts[seriesuid] = len(file_list)
+
+    #             # 3. 遍历该病人的所有切片文件
+    #             for slice_file in file_list:
+    #                 # ✅ 核心检查：每添加一个数据前检查
+    #                 if self.max_slices is not None and len(self.data_info) >= self.max_slices:
+    #                     print(f"\n🛑 Reached max_slices limit ({self.max_slices}). Stopping data loading.")
+    #                     break # 跳出文件循环
+
+    #                 try:
+    #                     # 解析当前切片的 Z 索引
+    #                     z_str = slice_file.rsplit('_', 1)[1].replace('.png', '')
+    #                     z = int(z_str)
+    #                 except (IndexError, ValueError):
+    #                     continue
+
+    #                 slice_path = os.path.join(subset_slices_path, slice_file)
+                    
+    #                 # 判断标签
+    #                 label = 1 if z in target_z_indices else 0
+                    
+    #                 # 推断 bbox (如果是阳性)
+    #                 bbox = [0, 0, 0, 0]
+    #                 if label == 1:
+    #                     bbox = self.infer_bbox_from_features(slice_path)
+
+    #                 self.data_info.append((slice_path, label, bbox))
+                
+    #             # 如果是因为达到上限跳出的文件循环，这里也需要跳出病人循环
+    #             if self.max_slices is not None and len(self.data_info) >= self.max_slices:
+    #                 break
+
+    #         # 如果是因为达到上限跳出的病人循环，这里也需要跳出 subset 循环
+    #         if self.max_slices is not None and len(self.data_info) >= self.max_slices:
+    #             break
+
+    #     print(f"✅ Loaded {len(self.data_info)} slices total.")
+        
+    #     if len(self.data_info) == 0:
+    #         print("WARNING: No valid slices found! Attempting fallback...")
+    #         self._load_fallback_data()
+        
     def infer_bbox_from_features(self, slice_path):
         # Load and preprocess the slice
         slice_2d = cv2.imread(slice_path, cv2.IMREAD_GRAYSCALE)
