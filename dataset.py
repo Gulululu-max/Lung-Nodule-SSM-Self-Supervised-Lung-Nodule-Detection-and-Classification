@@ -19,151 +19,34 @@ def get_metadata_or_default(mhd_dir, seriesuid):
             return origin, spacing
         except Exception as e:
             print(f"Error reading {mhd_file[0]}: {e}")
-    print(f"⚠️ Metadata not found for {seriesuid}, using defaults.")
+    # print(f"⚠️ Metadata not found for {seriesuid}, using defaults.") # 减少噪音
     return np.array([-256.0, -256.0, -500.0]), np.array([1.0, 1.0, 1.0])
 
 class Luna16Dataset(Dataset):
-
-    # def __init__(self, mhd_dir, slices_dir, candidates_df, transform, dino_model, device):
-    #     self.mhd_dir = mhd_dir
-    #     self.slices_dir = slices_dir
-    #     self.candidates_df = candidates_df
-    #     self.transform = transform
-    #     self.dino_model = dino_model
-    #     self.device = device
-    #     self.data_info = []
-    #     self.slice_counts = {}
-
-    #     print("Loading dataset... This may take some time.")
-        
-    #     # 预先构建 candidates 映射，加速查找: {seriesuid: [z_index_list]}
-    #     # 注意：这里暂时无法精确计算 z_index，因为缺少 spacing。
-    #     # 策略：先记录该病人有哪些结节坐标，稍后在读取切片时尝试匹配，
-    #     # 或者简单地将该病人所有切片标记为潜在阳性（如果只需弱标签）。
-    #     # 为了严谨，我们保留获取 metadata 的逻辑来转换坐标。
-    #     candidate_map = {}
-    #     for _, row in candidates_df.iterrows():
-    #         uid = row['seriesuid']
-    #         if uid not in candidate_map:
-    #             candidate_map[uid] = []
-    #         candidate_map[uid].append(row) # 存储整行数据以便后续计算
-
-    #     for subset in range(10):
-    #         subset_slices_path = os.path.join(self.slices_dir, f"subset{subset}")
-    #         if not os.path.exists(subset_slices_path):
-    #             print(f"⚠️ Warning: Subset directory not found: {subset_slices_path}")
-    #             continue
-
-    #         # ✅ 修改点 1: 直接获取该目录下所有 PNG 文件，而不是找子文件夹
-    #         all_png_files = [f for f in os.listdir(subset_slices_path) if f.endswith('.png')]
-            
-    #         if not all_png_files:
-    #             print(f"   No PNG files found in {subset_slices_path}")
-    #             continue
-
-    #         print(f"   Processing {subset}: {len(all_png_files)} files found")
-
-    #         # 按 seriesuid 分组文件，避免重复读取 metadata
-    #         # 结构: {seriesuid: ['file1.png', 'file2.png', ...]}
-    #         files_by_uid = {}
-    #         for fname in all_png_files:
-    #             try:
-    #                 # 假设文件名格式: {seriesuid}_{z}.png
-    #                 # 从右边分割一次，分离出 _z.png
-    #                 parts = fname.rsplit('_', 1)
-    #                 if len(parts) != 2:
-    #                     continue 
-    #                 uid = parts[0]
-    #                 if uid not in files_by_uid:
-    #                     files_by_uid[uid] = []
-    #                 files_by_uid[uid].append(fname)
-    #             except Exception:
-    #                 continue
-
-    #         # 遍历每个病人
-    #         for seriesuid, file_list in tqdm(files_by_uid.items(), desc=f"Indexing subset{subset}"):
-    #             # 1. 获取 Metadata (用于坐标转换)
-    #             origin, spacing = get_metadata_or_default(self.mhd_dir, seriesuid)
-                
-    #             # 2. 计算该病人的结节所在切片索引 (Z-index)
-    #             target_z_indices = set()
-    #             if seriesuid in candidate_map:
-    #                 for row in candidate_map[seriesuid]:
-    #                     try:
-    #                         # 将物理坐标转换为切片索引
-    #                         # coordZ 是物理坐标，origin[2] 是起始位置，spacing[2] 是层厚
-    #                         # 注意：SimpleITK 的 GetOrigin/Spacing 顺序可能与 CSV 不同，
-    #                         # 你的原代码用了 [::-1] 反转，这里保持一致
-    #                         c_z = row["coordZ"]
-    #                         o_z = origin[2]
-    #                         s_z = spacing[2]
-                            
-    #                         if s_z == 0: s_z = 1.0 # 防止除以零
-                            
-    #                         z_idx = int(np.rint((c_z - o_z) / s_z))
-    #                         target_z_indices.add(z_idx)
-    #                     except Exception as e:
-    #                         # print(f"Error calculating Z for {seriesuid}: {e}")
-    #                         pass
-
-    #             self.slice_counts[seriesuid] = len(file_list)
-
-    #             # 3. 遍历该病人的所有切片文件
-    #             for slice_file in file_list:
-    #                 try:
-    #                     # 解析当前切片的 Z 索引
-    #                     # 文件名: {uid}_{z}.png -> 取最后一部分去掉 .png
-    #                     z_str = slice_file.rsplit('_', 1)[1].replace('.png', '')
-    #                     z = int(z_str)
-    #                 except (IndexError, ValueError):
-    #                     continue
-
-    #                 slice_path = os.path.join(subset_slices_path, slice_file)
-                    
-    #                 # 判断标签
-    #                 label = 1 if z in target_z_indices else 0
-                    
-    #                 # 如果是阳性，尝试推断 bbox (阴性则跳过以节省时间，或给默认值)
-    #                 bbox = [0, 0, 0, 0]
-    #                 if label == 1:
-    #                     # 注意：infer_bbox_from_features 比较耗时，如果数据量大可能会慢
-    #                     # 如果只是为了跑通，可以先给默认值，或者只在训练时动态计算
-    #                     bbox = self.infer_bbox_from_features(slice_path)
-
-    #                 self.data_info.append((slice_path, label, bbox))
-
-    #     print(f"✅ Loaded {len(self.data_info)} slices.")
-    #     if len(self.data_info) == 0:
-    #         print("WARNING: No valid slices found! Attempting fallback...")
-    #         self._load_fallback_data()
     def __init__(self, mhd_dir, slices_dir, candidates_df, transform, dino_model, device, 
                  patient_ids=None, max_slices=None):
         """
         Args:
             patient_ids (list, optional): List of seriesuid to include. 
-                                          If None, includes all patients.
-            max_slices (int, optional): Max total slices to load (for debugging).
+            max_slices (int, optional): Max total slices to load.
         """
         self.mhd_dir = mhd_dir
         self.slices_dir = slices_dir
         self.candidates_df = candidates_df
         self.transform = transform
-        self.dino_model = dino_model
+        self.dino_model = dino_model  # 可能是 None
         self.device = device
         self.data_info = []
         self.slice_counts = {}
 
-        # 🔑 核心修改：构建病人 ID 集合用于快速查找
         allowed_patients = set(patient_ids) if patient_ids is not None else None
         
         if allowed_patients:
-            print(f"Filtering dataset for {len(allowed_patients)} specific patients...")
-            # 可选：提前过滤 candidates_df 以加速后续循环
+            # print(f"Filtering dataset for {len(allowed_patients)} specific patients...")
             self.candidates_df = self.candidates_df[self.candidates_df['seriesuid'].isin(allowed_patients)]
 
-        print("Loading dataset... This may take some time.")
+        # print("Loading dataset...")
         
-        # 预先构建 candidates 映射: {seriesuid: [row_data]}
         candidate_map = {}
         for _, row in self.candidates_df.iterrows():
             uid = row['seriesuid']
@@ -172,9 +55,9 @@ class Luna16Dataset(Dataset):
             candidate_map[uid].append(row)
 
         total_loaded = 0
+        skip_bbox_count = 0
         
         for subset in range(10):
-            # ✅ 检查 max_slices 限制
             if max_slices is not None and total_loaded >= max_slices:
                 break
 
@@ -186,7 +69,6 @@ class Luna16Dataset(Dataset):
             if not all_png_files:
                 continue
 
-            # 按 seriesuid 分组文件
             files_by_uid = {}
             for fname in all_png_files:
                 try:
@@ -195,7 +77,6 @@ class Luna16Dataset(Dataset):
                         continue 
                     uid = parts[0]
                     
-                    # 🔑 过滤：如果指定了病人列表且当前 UID 不在列表中，跳过
                     if allowed_patients is not None and uid not in allowed_patients:
                         continue
                         
@@ -208,18 +89,14 @@ class Luna16Dataset(Dataset):
             if not files_by_uid:
                 continue
 
-            print(f"   Processing subset{subset}: {len(files_by_uid)} patients found (after filtering)")
+            # print(f"   Processing subset{subset}: {len(files_by_uid)} patients...")
 
-            # 遍历每个病人
-            for seriesuid, file_list in tqdm(files_by_uid.items(), desc=f"Indexing subset{subset}"):
-                # ✅ 内部检查 max_slices
+            for seriesuid, file_list in tqdm(files_by_uid.items(), desc=f"Indexing subset{subset}", leave=False):
                 if max_slices is not None and total_loaded >= max_slices:
                     break
 
-                # 1. 获取 Metadata
                 origin, spacing = get_metadata_or_default(self.mhd_dir, seriesuid)
                 
-                # 2. 计算该病人的结节所在切片索引 (Z-index)
                 target_z_indices = set()
                 if seriesuid in candidate_map:
                     for row in candidate_map[seriesuid]:
@@ -235,9 +112,7 @@ class Luna16Dataset(Dataset):
 
                 self.slice_counts[seriesuid] = len(file_list)
 
-                # 3. 遍历该病人的所有切片文件
                 for slice_file in file_list:
-                    # ✅ 最内层检查 max_slices
                     if max_slices is not None and total_loaded >= max_slices:
                         break
 
@@ -248,95 +123,121 @@ class Luna16Dataset(Dataset):
                         continue
 
                     slice_path = os.path.join(subset_slices_path, slice_file)
-                    
-                    # 判断标签
                     label = 1 if z in target_z_indices else 0
                     
-                    # 推断 bbox (如果是阳性)
-                    bbox = [0, 0, 0, 0]
+                    # ✅ 核心修改：智能处理 Bbox
+                    bbox = [0.0, 0.0, 0.0, 0.0]
                     if label == 1:
-                        # 注意：如果数据量极大，这里可能会慢。
-                        # 如果只是做特征提取用于分类器，可以暂时返回默认值，
-                        # 或者只在需要可视化/检测任务时才调用此函数。
-                        # 为了保持逻辑一致，这里保留调用。
-                        bbox = self.infer_bbox_from_features(slice_path)
+                        if self.dino_model is not None:
+                            # 只有当模型存在时才进行耗时的特征推断
+                            bbox = self.infer_bbox_from_features(slice_path)
+                        else:
+                            # 🔑 关键：如果是端到端模式 (dino_model=None)，使用默认 Bbox
+                            # 这里使用 [0, 0, 1, 1] 表示整个图像都是 ROI，或者中心一个小框
+                            # 对于分类任务，Bbox Loss 可能被忽略或使用默认值，不会导致崩溃
+                            bbox = [0.0, 0.0, 1.0, 1.0] 
+                            skip_bbox_count += 1
+                    else:
+                        # 阴性样本不需要 Bbox
+                        bbox = [0.0, 0.0, 0.0, 0.0]
 
                     self.data_info.append((slice_path, label, bbox))
                     total_loaded += 1
                 
-                # 如果是因为 max_slices 跳出，需继续向外跳出
                 if max_slices is not None and total_loaded >= max_slices:
                     break
             
             if max_slices is not None and total_loaded >= max_slices:
                 break
 
-        print(f"✅ Loaded {len(self.data_info)} slices total.")
+        print(f"✅ Loaded {len(self.data_info)} slices. (Skipped Bbox inference for {skip_bbox_count} samples due to missing model)")
         
         if len(self.data_info) == 0:
             print("WARNING: No valid slices found! Attempting fallback...")
             self._load_fallback_data()
 
-
     def infer_bbox_from_features(self, slice_path):
-        # Load and preprocess the slice
-        slice_2d = cv2.imread(slice_path, cv2.IMREAD_GRAYSCALE)
-        if slice_2d is None:
-            print(f"Error loading image {slice_path}, using default bbox")
-            return [0, 0, 0, 0]
-        slice_2d_rgb = cv2.cvtColor(slice_2d, cv2.COLOR_GRAY2RGB)
-        slice_tensor = self.transform(slice_2d_rgb).unsqueeze(0).to(self.device)
+        # ✅ 防御性检查：防止外部调用时模型为 None
+        if self.dino_model is None:
+            return [0.0, 0.0, 1.0, 1.0]
 
-        # Extract features for the entire slice
-        with torch.no_grad():
-            features = self.dino_model(slice_tensor)  # Shape: (1, 1536)
+        try:
+            slice_2d = cv2.imread(slice_path, cv2.IMREAD_GRAYSCALE)
+            if slice_2d is None:
+                return [0.0, 0.0, 1.0, 1.0]
+            
+            slice_2d_rgb = cv2.cvtColor(slice_2d, cv2.COLOR_GRAY2RGB)
+            slice_tensor = self.transform(slice_2d_rgb).unsqueeze(0).to(self.device)
 
-        # Split the slice into patches (14x14 for DINOv2 ViT-L/14)
-        patch_size = 14
-        patches = []
-        for i in range(0, 504, patch_size):
-            for j in range(0, 504, patch_size):
-                patch = slice_tensor[:, :, i:i+patch_size, j:j+patch_size]
-                if patch.shape[2] == patch_size and patch.shape[3] == patch_size:
+            with torch.no_grad():
+                features = self.dino_model(slice_tensor)
+            
+            # DINOv2 ViT-L/14 output shape check
+            # Usually [B, Num_Tokens, Dim]. We need to handle patch extraction carefully.
+            # The original logic assumes specific patching on 504x504 image.
+            # Ensure slice_tensor is correctly shaped for patching.
+            
+            patch_size = 14
+            # Note: This patching logic assumes the input tensor is already resized to 504x504 by transform
+            # If transform resizes to 224 or other, this logic breaks. 
+            # Assuming transform keeps it at 504 or resizes to 504 based on your previous code context.
+            
+            h, w = slice_tensor.shape[2], slice_tensor.shape[3]
+            patches = []
+            coords = []
+            
+            for i in range(0, h, patch_size):
+                for j in range(0, w, patch_size):
+                    if i + patch_size > h or j + patch_size > w:
+                        continue
+                    patch = slice_tensor[:, :, i:i+patch_size, j:j+patch_size]
                     patches.append(patch)
-        if not patches:
-            return [0, 0, 0, 0]
-        patches_tensor = torch.cat(patches, dim=0)  # Shape: (num_patches, 3, 14, 14)
+                    coords.append((i, j))
+            
+            if not patches:
+                return [0.0, 0.0, 1.0, 1.0]
+                
+            patches_tensor = torch.cat(patches, dim=0)
 
-        # Extract features for each patch
-        with torch.no_grad():
-            patch_features = self.dino_model(patches_tensor)  # Shape: (num_patches, 1536)
+            with torch.no_grad():
+                patch_features = self.dino_model(patches_tensor)
+            
+            # Handle feature dimensions (CLS token vs flattened)
+            # Assuming we take CLS token for comparison: features[:, 0, :]
+            if len(features.shape) == 3:
+                slice_feature = features[0, 0, :] # CLS token
+                patch_features_cls = patch_features[:, 0, :] # CLS tokens for patches
+            else:
+                # Fallback if shapes are different
+                slice_feature = features.squeeze(0)
+                patch_features_cls = patch_features.squeeze(1) if len(patch_features.shape) > 2 else patch_features
 
-        # Compute cosine similarity between patch features and the slice feature
-        slice_feature = features.squeeze(0)  # Shape: (1536,)
-        similarities = torch.nn.functional.cosine_similarity(patch_features, slice_feature.unsqueeze(0), dim=1)
+            similarities = torch.nn.functional.cosine_similarity(patch_features_cls, slice_feature.unsqueeze(0), dim=1)
+            max_sim_idx = similarities.argmax().item()
+            
+            num_patches_per_row = w // patch_size
+            center_patch_y = (max_sim_idx // num_patches_per_row) * patch_size + patch_size // 2
+            center_patch_x = (max_sim_idx % num_patches_per_row) * patch_size + patch_size // 2
 
-        # Find the patch with the highest similarity
-        max_sim_idx = similarities.argmax().item()
-        num_patches_per_row = 504 // patch_size  # 36 patches per row
-        center_patch_y = (max_sim_idx // num_patches_per_row) * patch_size + patch_size // 2
-        center_patch_x = (max_sim_idx % num_patches_per_row) * patch_size + patch_size // 2
+            box_size = 20 
+            half_box = box_size // 2
+            x_min = max(0, center_patch_x - half_box)
+            x_max = min(w, center_patch_x + half_box)
+            y_min = max(0, center_patch_y - half_box)
+            y_max = min(h, center_patch_y + half_box)
 
-        # Infer bounding box around the center (assume 10mm diameter, ~20 pixels)
-        box_size = 20  # Fixed size based on typical nodule diameter
-        half_box = box_size // 2
-        x_min = max(0, center_patch_x - half_box)
-        x_max = min(504, center_patch_x + half_box)
-        y_min = max(0, center_patch_y - half_box)
-        y_max = min(504, center_patch_y + half_box)
-
-        # Normalize bounding box to [0, 1]
-        bbox = [x_min / 504.0, y_min / 504.0, (x_max - x_min) / 504.0, (y_max - y_min) / 504.0]
-        return bbox
+            bbox = [x_min / float(w), y_min / float(h), (x_max - x_min) / float(w), (y_max - y_min) / float(h)]
+            return bbox
+        except Exception as e:
+            # print(f"Error inferring bbox for {slice_path}: {e}")
+            return [0.0, 0.0, 1.0, 1.0]
 
     def _load_fallback_data(self):
         png_files = glob.glob(os.path.join(self.slices_dir, "**", "*.png"), recursive=True)
-        print(f"Found {len(png_files)} PNG files in fallback.")
         if len(png_files) > 1000:
             png_files = png_files[:1000]
         for slice_path in png_files:
-            self.data_info.append((slice_path, 0, [0, 0, 0, 0]))
-        print(f"Added {len(self.data_info)} slices using fallback method.")
+            self.data_info.append((slice_path, 0, [0.0, 0.0, 0.0, 0.0]))
 
     def __len__(self):
         return len(self.data_info)
@@ -346,11 +247,9 @@ class Luna16Dataset(Dataset):
         try:
             slice_2d = cv2.imread(slice_path, cv2.IMREAD_GRAYSCALE)
             if slice_2d is None:
-                print(f"Error loading image {slice_path}, using zeroed image")
                 slice_2d = np.zeros((504, 504), dtype=np.uint8)
             slice_2d_rgb = cv2.cvtColor(slice_2d, cv2.COLOR_GRAY2RGB)
             slice_tensor = self.transform(slice_2d_rgb).to(self.device)
             return slice_tensor, torch.tensor(label, dtype=torch.long), torch.tensor(bbox, dtype=torch.float32), slice_path
         except Exception as e:
-            print(f"Error processing {slice_path}: {e}")
-            return torch.zeros(3, 504, 504), torch.tensor(0, dtype=torch.long), torch.zeros(4, dtype=torch.float32), slice_path
+            return torch.zeros(3, 504, 504).to(self.device), torch.tensor(0, dtype=torch.long), torch.zeros(4, dtype=torch.float32).to(self.device), slice_path

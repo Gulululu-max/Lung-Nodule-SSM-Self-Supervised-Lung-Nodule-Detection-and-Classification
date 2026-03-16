@@ -2,6 +2,22 @@ import os
 import torch
 from torchvision import transforms
 
+# # about fine-tuning
+# # True: 加载 .npy 特征进行训练 (快，适合调参，Backbone 冻结)
+# # False: 加载原始图像进行端到端训练 (慢，性能上限高，可微调 Backbone)
+# use_precomputed_features = False 
+
+# # 仅在 use_precomputed_features=False 时生效
+# # True: 解冻 DINOv2 最后 N 层进行微调
+# # False: 冻结整个 DINOv2，只训练分类头 (相当于在线特征提取)
+# finetune_backbone = False 
+
+# # 微调相关超参数
+# finetune_last_n_blocks = 2      # 解冻最后几个 Transformer Block
+# backbone_lr = 1e-5              # Backbone 的小学习率
+# head_lr = 1e-3                  # 分类头的大学习率
+# weight_decay = 0.05             # 微调通常推荐用 AdamW
+
 # Define Paths
 mhd_dir = r"/home/ubuntu-user/WMQ/data/unzipped_luna16"  # Directory with original .mhd files for metadata
 slices_dir = r"/home/ubuntu-user/QMW/Data"  # Directory with 2D .png slices
