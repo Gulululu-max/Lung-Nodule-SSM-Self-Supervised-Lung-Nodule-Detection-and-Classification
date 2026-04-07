@@ -326,6 +326,120 @@ test_metrics = {
     "AUC": float(roc_auc_score(all_labels, all_probs))
 }
 
+# ================= 6.1 额外分析图表 =================
+def plot_additional_metrics(all_labels, all_probs, all_preds, features, log_dir):
+    """绘制额外的分析图表"""
+    from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+    from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
+    from sklearn.manifold import TSNE
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    plt.style.use('seaborn-v0_8-whitegrid')
+    
+    # 1. 混淆矩阵
+    fig, ax = plt.subplots(figsize=(8, 6))
+    cm = confusion_matrix(all_labels, all_preds)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Non-Nodule', 'Nodule'])
+    disp.plot(ax=ax, cmap='Blues', values_format='d')
+    ax.set_title('Confusion Matrix', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(os.path.join(log_dir, 'confusion_matrix.png'), dpi=150)
+    plt.close()
+    print("  ✅ confusion_matrix.png")
+    
+    # 2. ROC 曲线
+    fig, ax = plt.subplots(figsize=(8, 6))
+    fpr, tpr, _ = roc_curve(all_labels, all_probs)
+    roc_auc = auc(fpr, tpr)
+    ax.plot(fpr, tpr, 'b-', linewidth=2, label=f'ROC (AUC = {roc_auc:.4f})')
+    ax.plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random')
+    ax.set_xlabel('False Positive Rate', fontsize=12)
+    ax.set_ylabel('True Positive Rate', fontsize=12)
+    ax.set_title('ROC Curve', fontsize=14, fontweight='bold')
+    ax.legend(loc='lower right')
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(log_dir, 'roc_curve.png'), dpi=150)
+    plt.close()
+    print("  ✅ roc_curve.png")
+    
+    # 3. Precision-Recall 曲线
+    fig, ax = plt.subplots(figsize=(8, 6))
+    precision, recall, _ = precision_recall_curve(all_labels, all_probs)
+    ap = average_precision_score(all_labels, all_probs)
+    ax.plot(recall, precision, 'r-', linewidth=2, label=f'PR (AP = {ap:.4f})')
+    ax.set_xlabel('Recall', fontsize=12)
+    ax.set_ylabel('Precision', fontsize=12)
+    ax.set_title('Precision-Recall Curve', fontsize=14, fontweight='bold')
+    ax.legend(loc='lower left')
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(log_dir, 'pr_curve.png'), dpi=150)
+    plt.close()
+    print("  ✅ pr_curve.png")
+    
+    # 4. 预测概率分布直方图
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.hist(all_probs[all_labels == 0], bins=50, alpha=0.6, label='Non-Nodule', color='blue')
+    ax.hist(all_probs[all_labels == 1], bins=50, alpha=0.6, label='Nodule', color='red')
+    ax.set_xlabel('Predicted Probability', fontsize=12)
+    ax.set_ylabel('Count', fontsize=12)
+    ax.set_title('Prediction Probability Distribution', fontsize=14, fontweight='bold')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(log_dir, 'probability_distribution.png'), dpi=150)
+    plt.close()
+    print("  ✅ probability_distribution.png")
+    
+    # 5. t-SNE 特征可视化 (采样以加快速度)
+    if len(features) > 1000:
+        # 采样
+        np.random.seed(42)
+        sample_idx = np.random.choice(len(features), 1000, replace=False)
+        features_sample = features[sample_idx]
+        labels_sample = all_labels[sample_idx]
+    else:
+        features_sample = features
+        labels_sample = all_labels
+    
+    print("  ⏳ Computing t-SNE (may take a while)...")
+    tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, len(features_sample)-1))
+    features_2d = tsne.fit_transform(features_sample)
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    scatter = ax.scatter(features_2d[:, 0], features_2d[:, 1], 
+                        c=labels_sample, cmap='coolwarm', alpha=0.6, s=20)
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label('Label (0: Non-Nodule, 1: Nodule)', fontsize=10)
+    ax.set_xlabel('t-SNE Dimension 1', fontsize=12)
+    ax.set_ylabel('t-SNE Dimension 2', fontsize=12)
+    ax.set_title('t-SNE Visualization of Features', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(os.path.join(log_dir, 'tsne_visualization.png'), dpi=150)
+    plt.close()
+    print("  ✅ tsne_visualization.png")
+    
+    # 6. 类别分布统计
+    fig, ax = plt.subplots(figsize=(6, 4))
+    unique, counts = np.unique(all_labels, return_counts=True)
+    bars = ax.bar(['Non-Nodule', 'Nodule'], counts, color=['blue', 'red'], alpha=0.7)
+    ax.set_ylabel('Count', fontsize=12)
+    ax.set_title('Class Distribution in Test Set', fontsize=14, fontweight='bold')
+    for bar, count in zip(bars, counts):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 50, 
+               str(count), ha='center', fontsize=11)
+    ax.grid(True, alpha=0.3, axis='y')
+    plt.tight_layout()
+    plt.savefig(os.path.join(log_dir, 'class_distribution.png'), dpi=150)
+    plt.close()
+    print("  ✅ class_distribution.png")
+
+# 调用函数生成额外图表
+print("\n📊 Generating additional analysis plots...")
+plot_additional_metrics(all_labels, all_probs, all_preds, test_ds.features, log_dir)
+
 total_training_time = time.time() - start_time_total
 
 # ================= 7. 经典模型对比 =================
