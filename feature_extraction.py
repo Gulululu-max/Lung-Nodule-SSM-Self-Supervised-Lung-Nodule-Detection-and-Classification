@@ -16,7 +16,6 @@ dinov2_vitl14.eval()
 # Load Candidates
 df_candidates = pd.read_csv(candidates_file)
 
-# 3. 🔑 按病人 ID (SeriesUID) 划分数据
 print("Splitting data by Patient ID (SeriesUID)...")
 unique_patients = df_candidates['seriesuid'].unique()
 
@@ -39,8 +38,7 @@ val_patients, test_patients = train_test_split(
 print(f"Total Patients: {len(unique_patients)}")
 print(f"Train: {len(train_patients)}, Val: {len(val_patients)}, Test: {len(test_patients)}")
 
-# 4. 初始化三个独立的数据集 (传入 patient_ids)
-# 注意：正式运行时去掉 max_slices 或设为 None
+# 初始化三个独立的数据集 (传入 patient_ids)
 train_dataset = Luna16Dataset(
     mhd_dir, slices_dir, df_candidates, transform, dinov2_vitl14, device, 
     patient_ids=train_patients, 

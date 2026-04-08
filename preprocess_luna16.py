@@ -11,20 +11,15 @@ from pathlib import Path
 # 1. 压缩包所在目录 (包含 subset0.zip, subset1.zip ...)
 ZIP_SOURCE_DIR = r"/home/ubuntu-user/WMQ/data/subsets"
 
-# 2. 临时解压目录 (解压后的 .mhd/.raw 将放在这里，处理完可删除)
+# 2. 临时解压目录 
 UNZIP_TEMP_DIR = r"/home/ubuntu-user/WMQ/data/unzipped_luna16"
 
-# 3. 最终输出目录 (生成的 PNG 将按 subset0-subset9 结构存放在这里)
-# 你的特征提取程序会读取这个目录
+# 3. 最终输出目录 
 OUTPUT_DIR = r"/home/ubuntu-user/QMW/Data"
 
 # 4. 目标图像尺寸
 TARGET_SIZE = 504
 
-# 5. 是否清理旧数据 (True: 每次运行前清空 OUTPUT_DIR，防止旧数据干扰)
-# CLEAN_OUTPUT_BEFORE_RUN = True
-
-# ===============================================================
 
 def unzip_all_zips(source_dir, target_dir):
     """解压所有 zip 文件到目标目录，保持 subsetX 的文件夹结构"""
@@ -36,8 +31,6 @@ def unzip_all_zips(source_dir, target_dir):
     if not zip_files:
         print(f"   ⚠️ 未在 {source_dir} 找到 .zip 文件。")
         print(f"   检查是否已经解压？直接查看 {target_dir} 是否有内容。")
-        # 如果没有zip，假设用户已经手动解压到了 target_dir 或者 source_dir 本身就是解压后的
-        # 这里为了逻辑严谨，如果没找到zip，我们尝试直接用 source_dir 作为数据源（如果里面已经有subset文件夹）
         return False 
 
     print(f"   发现 {len(zip_files)} 个压缩包，开始解压到 {target_dir} ...")
@@ -45,8 +38,6 @@ def unzip_all_zips(source_dir, target_dir):
     for zip_path in tqdm(zip_files, desc="Unzipping"):
         try:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                # 解压到 target_dir
-                # 压缩包内部通常已经是 subset0/... 结构，zipfile 会保留这个结构
                 zip_ref.extractall(target_dir)
         except Exception as e:
             print(f"\n❌ 解压失败 {zip_path.name}: {e}")
@@ -80,7 +71,6 @@ def preprocess_luna16():
     # 尝试解压
     has_zips = unzip_all_zips(ZIP_SOURCE_DIR, UNZIP_TEMP_DIR)
     
-    # 如果没找到zip，检查 UNZIP_TEMP_DIR 是否为空，如果为空，尝试直接用 ZIP_SOURCE_DIR (以防用户已经解压在原处)
     if not has_zips:
         if not list(Path(UNZIP_TEMP_DIR).glob("subset*")):
             # 检查原目录是否有 subset 文件夹
@@ -117,7 +107,6 @@ def preprocess_luna16():
     error_count = 0
 
     # 4. 开始处理
-    # 关键点：我们需要知道每个文件属于哪个 subset，以便在输出端重建目录结构
     for mhd_path in tqdm(mhd_files, desc="Processing Scans"):
         try:
             path_obj = Path(mhd_path)
@@ -127,7 +116,6 @@ def preprocess_luna16():
             try:
                 rel_path = path_obj.relative_to(data_source_path)
             except ValueError:
-                # 如果不在 data_source_path 下（极少见），取最后两级
                 rel_path = Path(path_obj.parent.name) / path_obj.name
 
             # 提取 subset 名称 (例如 "subset0")
@@ -135,15 +123,10 @@ def preprocess_luna16():
             filename = path_obj.name
             seriesuid = filename.replace(".mhd", "")
 
-            # 【构建输出路径】
-            # 目标结构：OUTPUT_DIR / subset0 / seriesuid_z.png
             out_subset_dir = os.path.join(OUTPUT_DIR, subset_name)
             os.makedirs(out_subset_dir, exist_ok=True)
             
             out_series_dir = out_subset_dir # 直接放在 subset 文件夹下
-            # 如果希望每个病人一个文件夹，取消下面这行的注释：
-            # out_series_dir = os.path.join(out_subset_dir, seriesuid)
-            # os.makedirs(out_series_dir, exist_ok=True)
 
             # 读取图像
             img_itk = sitk.ReadImage(mhd_path)

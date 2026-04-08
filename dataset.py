@@ -35,17 +35,16 @@ class Luna16Dataset(Dataset):
         self.slices_dir = slices_dir
         self.candidates_df = candidates_df
         self.transform = transform
-        self.dino_model = dino_model  # 这个实际上只用于bbox推断，不需要在__getitem__中使用
+        self.dino_model = dino_model  
         self.device = device
         self.data_info = []
         self.slice_counts = {}
 
-        # 🔑 核心修改：构建病人 ID 集合用于快速查找
+        # 构建病人 ID 集合用于快速查找
         allowed_patients = set(patient_ids) if patient_ids is not None else None
         
         if allowed_patients:
             print(f"Filtering dataset for {len(allowed_patients)} specific patients...")
-            # 可选：提前过滤 candidates_df 以加速后续循环
             self.candidates_df = self.candidates_df[self.candidates_df['seriesuid'].isin(allowed_patients)]
 
         print("Loading dataset with 3D-aware processing... This may take some time.")
@@ -61,7 +60,6 @@ class Luna16Dataset(Dataset):
         total_loaded = 0
         
         for subset in range(10):
-            # ✅ 检查 max_slices 限制
             if max_slices is not None and total_loaded >= max_slices:
                 break
 
@@ -81,8 +79,7 @@ class Luna16Dataset(Dataset):
                     if len(parts) != 2:
                         continue 
                     uid = parts[0]
-                    
-                    # 🔑 过滤：如果指定了病人列表且当前 UID 不在列表中，跳过
+
                     if allowed_patients is not None and uid not in allowed_patients:
                         continue
                         
@@ -99,14 +96,14 @@ class Luna16Dataset(Dataset):
 
             # 遍历每个病人
             for seriesuid, file_list in tqdm(files_by_uid.items(), desc=f"Indexing subset{subset}"):
-                # ✅ 内部检查 max_slices
+                # 内部检查 max_slices
                 if max_slices is not None and total_loaded >= max_slices:
                     break
 
                 # 1. 获取 Metadata
                 origin, spacing = get_metadata_or_default(self.mhd_dir, seriesuid)
                 
-                # 2. 计算该病人的结节所在切片索引 (Z-index) - 这里是3D映射的核心
+                # 2. 计算该病人的结节所在切片索引 (Z-index)
                 target_z_indices = set()
                 target_coords = {}  # 存储坐标信息用于边界框计算
                 if seriesuid in candidate_map:
@@ -129,9 +126,9 @@ class Luna16Dataset(Dataset):
 
                 self.slice_counts[seriesuid] = len(file_list)
 
-                # 3. 遍历该病人的所有切片文件 - 现在我们只关注包含结节的切片
+                # 3. 遍历该病人的所有切片文件 - 只关注包含结节的切片
                 for slice_file in file_list:
-                    # ✅ 最内层检查 max_slices
+                    # 最内层检查 max_slices
                     if max_slices is not None and total_loaded >= max_slices:
                         break
 
@@ -152,7 +149,7 @@ class Luna16Dataset(Dataset):
                         # 使用3D坐标信息计算更精确的边界框
                         bbox = self.infer_bbox_from_3d_coords(slice_path, target_coords[z], origin, spacing)
 
-                    # 🔑 关键修改：编码3D上下文到3个通道
+                    # 编码3D上下文到3个通道
                     processed_slice_path = self._create_3d_context_slice(
                         seriesuid, z, file_list, subset_slices_path
                     )
@@ -177,7 +174,6 @@ class Luna16Dataset(Dataset):
     def _create_3d_context_slice(self, seriesuid, z_idx, file_list, subset_path):
         """
         创建包含3D上下文的多通道切片
-        模拟论文中"replicated across all three channels to simulate 3D spatial context"
         """
         # Sort file list by z index to find adjacent slices
         sorted_files = sorted(file_list, key=lambda x: int(x.rsplit('_', 1)[1].replace('.png', '')))

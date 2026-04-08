@@ -38,7 +38,6 @@ print("="*70)
 print(f"🚀 Starting Professional Training Session: {timestamp}")
 print("="*70)
 
-# 记录所有超参数和环境信息
 config_info = {
     "timestamp": timestamp,
     "device": str(device),
@@ -56,7 +55,7 @@ config_info = {
     }
 }
 
-# ================= 1. 数据集加载 (带路径) =================
+# 数据集加载 (带路径) 
 class FastFeatureDataset(Dataset):
     def __init__(self, feat_path, label_path, bbox_path, path_list_file):
         self.features = np.load(feat_path)
@@ -118,7 +117,7 @@ feature_dim = train_ds.features.shape[1]
 config_info["hyperparameters"]["feature_dim"] = feature_dim
 print(f"✅ Data Loaded. Feature Dim: {feature_dim}")
 
-# ================= 2. 模型与优化器 =================
+# 模型与优化器 
 model = DinoDetector(feature_dim).to(device)
 criterion_class = nn.CrossEntropyLoss()
 criterion_bbox = nn.MSELoss()
@@ -130,7 +129,7 @@ with open(log_json_path, 'w') as f:
     json.dump(config_info, f, indent=4, default=str)
 print(f"💾 Config saved to: {log_json_path}")
 
-# ================= 3. 辅助函数：画图 =================
+# 画图
 def draw_bboxes_on_slice(slice_path, bbox_pred, bbox_gt, output_path):
     if not slice_path or not os.path.exists(slice_path):
         return False
@@ -152,7 +151,7 @@ def draw_bboxes_on_slice(slice_path, bbox_pred, bbox_gt, output_path):
     cv2.imwrite(output_path, img_rgb)
     return True
 
-# ================= 4. 训练循环 (带详细日志) =================
+# 训练循环
 history = {
     "epoch": [],
     "train_loss": [], "train_acc": [],
@@ -265,7 +264,7 @@ for epoch in range(num_epochs):
             'config': config_info
         }, os.path.join(log_dir, "best_model.pth"))
 
-# ================= 5. 保存日志与绘图 =================
+# 保存日志与绘图
 # 保存 CSV
 df_history = pd.DataFrame(history)
 df_history.to_csv(log_csv_path, index=False)
@@ -298,7 +297,7 @@ plt.savefig(curve_img_path, dpi=300)
 plt.close()
 print(f"📈 Training Curves saved to: {curve_img_path}")
 
-# ================= 6. 测试集评估 =================
+# 测试集评估
 print("\n🧪 Evaluating Best Model on Test Set...")
 checkpoint = torch.load(os.path.join(log_dir, "best_model.pth"))
 model.load_state_dict(checkpoint['model_state_dict'])
@@ -326,7 +325,7 @@ test_metrics = {
     "AUC": float(roc_auc_score(all_labels, all_probs))
 }
 
-# ================= 6.1 额外分析图表 =================
+# 分析图表
 def plot_additional_metrics(all_labels, all_probs, all_preds, features, log_dir):
     """绘制额外的分析图表"""
     from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
@@ -442,7 +441,7 @@ plot_additional_metrics(all_labels, all_probs, all_preds, test_ds.features, log_
 
 total_training_time = time.time() - start_time_total
 
-# ================= 7. 经典模型对比 =================
+# 经典模型对比
 print("\n🤖 Running Classical Classifiers for Comparison...")
 clf_results = {}
 classifiers = {
@@ -467,7 +466,7 @@ for name, clf in classifiers.items():
         "Training_Time": round(t1-t0, 2)
     }
 
-# ================= 8. 生成最终报告 =================
+# 最终报告
 final_report = {
     "summary": {
         "total_training_time_seconds": round(total_training_time, 2),
